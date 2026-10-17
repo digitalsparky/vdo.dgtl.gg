@@ -1239,6 +1239,7 @@ WebRTC.Media = (function () {
 	session.hash = false;
 	session.height = false;
 	session.iframeSrc = false;
+	session.iframeWhep = false;
 	session.iframeEle = false;
 	session.encodedInsertableStreams = false;
 	session.invite = false;
@@ -8963,6 +8964,11 @@ WebRTC.Media = (function () {
 
 				if ("iframeSrc" in msg) {
 					try {
+						if (session.rpcs[UUID].iframeEle && (session.rpcs[UUID].iframeEle.stopWhep || msg.iframeWhep)) {
+							if (session.rpcs[UUID].iframeEle.stopWhep) session.rpcs[UUID].iframeEle.stopWhep();
+							session.rpcs[UUID].iframeEle.remove();
+							session.rpcs[UUID].iframeEle = false;
+						}
 						session.rpcs[UUID].iframeSrc = msg.iframeSrc || false;
 
 						if (session.director) {
@@ -8993,7 +8999,7 @@ WebRTC.Media = (function () {
 						} else {
 							if (session.rpcs[UUID].iframeSrc == false) {
 								try {
-									session.rpcs[UUID].iframeEle.remove();
+									if (session.rpcs[UUID].iframeEle) session.rpcs[UUID].iframeEle.remove();
 								} catch (e) {
 									errorlog(e);
 								}
@@ -9018,17 +9024,17 @@ WebRTC.Media = (function () {
 									if (session.broadcast !== null) {
 										if (session.rpcs[UUID].streamID === session.broadcast) {
 											if (session.noiframe === false) {
-												session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID);
+												session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID, msg.iframeWhep);
 												mustUpdateMixer = true;
 												session.broadcastIFrame = session.rpcs[UUID].iframeEle;
-												if (session.rpcs[UUID].streamID) {
+												if (session.rpcs[UUID].iframeEle && session.rpcs[UUID].streamID) {
 													session.rpcs[UUID].iframeEle.dataset.sid = session.rpcs[UUID].streamID;
 												}
 											} else if (session.rpcs[UUID].streamID in session.noiframe) {
-												session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID);
+												session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID, msg.iframeWhep);
 												mustUpdateMixer = true; // hopefully the director will bud out
 												session.broadcastIFrame = session.rpcs[UUID].iframeEle;
-												if (session.rpcs[UUID].streamID) {
+												if (session.rpcs[UUID].iframeEle && session.rpcs[UUID].streamID) {
 													session.rpcs[UUID].iframeEle.dataset.sid = session.rpcs[UUID].streamID;
 												}
 											}
@@ -9036,17 +9042,17 @@ WebRTC.Media = (function () {
 									} else if (session.directorUUID) {
 										if (UUID == session.directorUUID) {
 											if (session.noiframe === false) {
-												session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID);
+												session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID, msg.iframeWhep);
 												mustUpdateMixer = true;
 												session.broadcastIFrame = session.rpcs[UUID].iframeEle;
-												if (session.rpcs[UUID].streamID) {
+												if (session.rpcs[UUID].iframeEle && session.rpcs[UUID].streamID) {
 													session.rpcs[UUID].iframeEle.dataset.sid = session.rpcs[UUID].streamID;
 												}
 											} else if (session.rpcs[UUID].streamID in session.noiframe) {
-												session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID);
+												session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID, msg.iframeWhep);
 												mustUpdateMixer = true; // hopefully the director will bud out
 												session.broadcastIFrame = session.rpcs[UUID].iframeEle;
-												if (session.rpcs[UUID].streamID) {
+												if (session.rpcs[UUID].iframeEle && session.rpcs[UUID].streamID) {
 													session.rpcs[UUID].iframeEle.dataset.sid = session.rpcs[UUID].streamID;
 												}
 											}
@@ -9054,15 +9060,15 @@ WebRTC.Media = (function () {
 									}
 								} else {
 									if (session.noiframe === false) {
-										session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID);
+										session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID, msg.iframeWhep);
 										mustUpdateMixer = true;
-										if (session.rpcs[UUID].streamID) {
+										if (session.rpcs[UUID].iframeEle && session.rpcs[UUID].streamID) {
 											session.rpcs[UUID].iframeEle.dataset.sid = session.rpcs[UUID].streamID;
 										}
 									} else if (session.rpcs[UUID].streamID in session.noiframe) {
-										session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID);
+										session.rpcs[UUID].iframeEle = loadIframe(msg.iframeSrc, UUID, msg.iframeWhep);
 										mustUpdateMixer = true; // hopefully the director will bud out
-										if (session.rpcs[UUID].streamID) {
+										if (session.rpcs[UUID].iframeEle && session.rpcs[UUID].streamID) {
 											session.rpcs[UUID].iframeEle.dataset.sid = session.rpcs[UUID].streamID;
 										}
 									}
@@ -11843,6 +11849,10 @@ WebRTC.Media = (function () {
 
 	session.closeRPC = function (UUID, hangup = false, keepMedia = false) {
 		var peer = session.rpcs[UUID];
+		if (peer && peer.sharedWebsiteElement) {
+			peer.sharedWebsiteElement.stopWhep();
+			return false;
+		}
 		var screen = session.rpcs[UUID + "_screen"];
 		keepMedia = !!(keepMedia && !hangup && peer && peer.streamID && !peer.realUUID && !peer.whip &&
 			((peer.whep && peer.whep.connectionState === "connected") || (screen && screen.whep && screen.whep.connectionState === "connected")));
@@ -11933,6 +11943,7 @@ WebRTC.Media = (function () {
 			}
 			if (!(typeof UUID === "string" && UUID.endsWith("_screen"))) {
 				try {
+					if (session.rpcs[UUID].iframeEle && session.rpcs[UUID].iframeEle.stopWhep) session.rpcs[UUID].iframeEle.stopWhep();
 					stopPrimaryWhep(UUID);
 					stopScreenWhep(UUID);
 				} catch (e) {
@@ -12280,7 +12291,7 @@ WebRTC.Media = (function () {
 				return;
 			}
 		} else if (session.maxconnections !== false) {
-			if (Object.keys(session.rpcs).length + Object.keys(session.pcs).length >= session.maxconnections) {
+			if (countIncomingPeers() + Object.keys(session.pcs).length >= session.maxconnections) {
 				log("closing 2");
 				log("closing 9");
 				session.closePC(UUID);
@@ -12404,7 +12415,10 @@ WebRTC.Media = (function () {
 				log("rtc data channel error: " + UUID);
 			};
 
-			session.pcs[UUID].sendChannel.onopen = () => {
+			session.pcs[UUID].sendChannel.onopen = e => {
+				if (session.invitecamManaged && (!session.pcs[UUID] || session.pcs[UUID].sendChannel !== e.currentTarget)) {
+					return;
+				}
 				updateWhepDirectorControls(UUID);
 				// we don't need this anymore if muting locally.
 				if (reconnect) {
@@ -15830,6 +15844,7 @@ WebRTC.Media = (function () {
 				if (session.iframeSrc) {
 					var data = {};
 					data.iframeSrc = session.iframeSrc;
+					data.iframeWhep = session.iframeWhep;
 
 					if (session.iframeEle && session.iframeEle.sendOnNewConnect) {
 						if (session.iframeSrc.startsWith("https://www.youtube.com/")) {
@@ -22951,6 +22966,15 @@ WebRTC.Media = (function () {
 		}
 	}
 
+	function countIncomingPeers() {
+		var peers = Object.keys(session.rpcs);
+		var count = peers.length;
+		for (var i = 0; i < peers.length; i++) {
+			if (session.rpcs[peers[i]] && session.rpcs[peers[i]].sharedWebsiteElement) count -= 1;
+		}
+		return count;
+	}
+
 	/// THE PROBLEM IS I HAVE A PATH WAY FOR INPUT AND A PATHWAY FOR OUTPUT, BU THEY SHARE THE SAME PATHWAY. LOL.  I NEED TO COMBINE THESE INTO ONE.
 	session.setupIncoming = async function (msg) {
 		if (!validateIncomingStreamIDs(msg)) return false;
@@ -23053,9 +23077,9 @@ WebRTC.Media = (function () {
 		const incomingLimitReached = function () {
 			var retainedCount = retainedMedia ? 1 + (session.rpcs[UUID + "_screen"] ? 1 : 0) : 0;
 			if (session.maxpublishers !== false) {
-				return Object.keys(session.rpcs).length - retainedCount >= session.maxpublishers;
+				return countIncomingPeers() - retainedCount >= session.maxpublishers;
 			} else if (session.maxconnections !== false) {
-				return Object.keys(session.rpcs).length - retainedCount + Object.keys(session.pcs).length >= session.maxconnections;
+				return countIncomingPeers() - retainedCount + Object.keys(session.pcs).length >= session.maxconnections;
 			}
 			return false;
 		};
@@ -23123,7 +23147,7 @@ WebRTC.Media = (function () {
 		}
 
 		if (session.security) {
-			if (Object.keys(session.rpcs).length - (retainedMedia && session.rpcs[UUID + "_screen"] ? 1 : 0) > 1) {
+			if (countIncomingPeers() - (retainedMedia && session.rpcs[UUID + "_screen"] ? 1 : 0) > 1) {
 				warnlog("TOO MANY PUBLISHING PEERS");
 				log(session.rpcs);
 				delete session.rpcs[UUID];
@@ -23269,6 +23293,10 @@ WebRTC.Media = (function () {
 				if (Object.prototype.hasOwnProperty.call(retainedMedia, mediaField)) {
 					session.rpcs[UUID][mediaField] = retainedMedia[mediaField];
 				}
+			}
+			if (retainedMedia.iframeEle && retainedMedia.iframeEle.stopWhep) {
+				session.rpcs[UUID].iframeEle = retainedMedia.iframeEle;
+				session.rpcs[UUID].iframeSrc = retainedMedia.iframeSrc;
 			}
 			var resumedPeer = session.rpcs[UUID];
 			await checkDirectorStreamID();
